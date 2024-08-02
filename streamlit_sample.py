@@ -224,7 +224,7 @@ if flop_type != 'All':
     filtered_df = filtered_df[filtered_df['Flop_type'] == flop_type]
 
 # タイトル
-st.title("Plotlyグラフの2カラム表示")
+st.title("root-check ノードの分析画面")
 
 # 2カラムレイアウトの作成
 col1, col2 = st.columns(2)
