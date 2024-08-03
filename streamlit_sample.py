@@ -6,7 +6,7 @@ import numpy as np
 
 
 #弾性グラフ関数
-def plot_elasticity(df, x_column, y_column, bin_size=10, bin_threshold=20):
+def plot_elasticity(df, x_column, y_column, title, bin_size=10, bin_threshold=20):
     # binの作成
     bins = np.arange(0, 201, bin_size)
     df = df.copy()
@@ -51,7 +51,7 @@ def plot_elasticity(df, x_column, y_column, bin_size=10, bin_threshold=20):
     fig.add_trace(go.Scatter(x=probability_raise['x_value'], y=probability_raise['probability_raise'], 
                              mode='lines+markers', name='Raise freq'), row=1, col=1)
 
-    # y = 1 / (1 + x / 100) の曲線を追加
+    # MDF曲線を追加
     x_range = np.linspace(0, 200, 1000)
     y_curve = 1 / (1 + x_range / 100)
     fig.add_trace(go.Scatter(x=x_range, y=y_curve, mode='lines', name="MDF"),
@@ -63,8 +63,8 @@ def plot_elasticity(df, x_column, y_column, bin_size=10, bin_threshold=20):
 
     # レイアウトの設定
     fig.update_layout(
-        title='Flop elasticity',
-        yaxis_title='Ratio',
+        title=title,
+        yaxis_title='Frequency',
         yaxis_tickformat='.0%',
         xaxis2_title='Bet Size (%)',
         yaxis2_title='Data Count',
@@ -114,21 +114,16 @@ def plot_action_distribution(df, column_name, title):
         orientation='h',
         text=[f'{category_percentages[cat]:.1f}%' for cat in sorted_categories],
         textposition='outside',
-        textfont=dict(size=12, color='#E0E0E0'),
-        marker=dict(color='#5D8AA8', line=dict(color='#B0C4DE', width=1))
+        textfont=dict(size=12),
+        marker=dict(line=dict(width=1))
     ))
 
     # レイアウトの設定
     fig.update_layout(
-        title=dict(text=title, font=dict(color='#E0E0E0')),
-        xaxis_title=dict(text='割合 (%)', font=dict(color='#E0E0E0')),
-        yaxis_title=dict(text='カテゴリ', font=dict(color='#E0E0E0')),
+        title=dict(text=title),
+        xaxis_title=dict(text="Frequency"),
+        yaxis_title=dict(text='Action'),
         height=max(500, len(sorted_categories) * 30),
-        margin=dict(l=150, r=20, t=50, b=50),
-        yaxis=dict(color='#E0E0E0'),
-        plot_bgcolor='#1E1E1E',
-        paper_bgcolor='#121212',
-        font=dict(color='#E0E0E0')
     )
 
     return fig
@@ -154,8 +149,8 @@ def plot_hand_distribution(df, category_column, title="Category Proportions"):
     # レイアウトの設定
     fig.update_layout(
         title=title,
-        xaxis_title="割合 (%)",
-        yaxis_title=category_column,
+        xaxis_title="Frequency",
+        yaxis_title="Hand rank",
         height=max(500, len(proportions) * 30),  # グラフの高さを動的に調整
         xaxis=dict(range=[0, 100])
     )
@@ -171,33 +166,29 @@ def load_data(file_path):
     return df
 
 
-# ページ設定
+# ここからページ作成
 st.set_page_config(layout="wide")
-
+st.title("root-checkノードの分析画面")
 selected_file = st.sidebar.selectbox("プールデータの選択", ["50-100 1M mda.csv"])
 df = load_data(selected_file)
-
-#サイドバーの設定
-pot_range = st.sidebar.slider("Postflop開始時のpotsize($)", 2, 50,(5, 10))
-
-aggressor = st.sidebar.selectbox("Preflop Aggressor", ['All'] + list(df['Aggressor'].unique()))
-
-oop_positions = st.sidebar.multiselect("OOP Position", 
-                                       ['All'] + list(df['OOP_position'].unique()),
-                                       default=['All'])
-
-ip_positions = st.sidebar.multiselect("IP Position", 
-                                      ['All'] + list(df['IP_position'].unique()),
-                                       default=['All'])
-
 oop_rank = st.sidebar.selectbox("OOP Player Rank", ['All'] + list(df['OOP_player_rank'].unique()))
-
 ip_rank = st.sidebar.selectbox("IP Player Rank", ['All'] + list(df['IP_player_rank'].unique()))
 
-high_card = st.sidebar.slider("ハイカードの範囲", 2, 14,(2, 14))
+#サイドバー設定
+with st.sidebar:
+    with st.expander("Preflop設定"):
+        pot_range = st.slider("Preflop終了時のpotsize($)", 2, 50,(4, 9))
+        aggressor = st.selectbox("Preflop Aggressor", ["All", "OOP", "IP"], index=2)
+        oop_positions = st.multiselect("OOP Position", ['All'] + list(df['OOP_position'].unique()),default=['BB'])
+        ip_positions = st.multiselect("IP Position", ['All'] + list(df['IP_position'].unique()),default=['All'])
 
-flop_type = st.sidebar.selectbox("Flopのタイプ", ['All'] + list(df['Flop_type'].unique()))
+    with st.expander("コミュニティカード設定"):
+        high_card = st.slider("Flopハイカード", 2, 14,(2, 14))
+        flop_type = st.selectbox("Flopのタイプ", ['All'] + list(df['Flop_type'].unique()))
 
+    with st.expander("Postflop設定"):
+        flop_bet_size = st.slider("Flop bet size(pot%)", 10, 200,(20, 60))
+        bmcb_size = st.slider("Turn OOPbet size(pot%)", 10, 200,(30, 80))
 
 # フィルタリングを適用
 filtered_df = df[
@@ -223,39 +214,32 @@ if ip_rank != 'All':
 if flop_type != 'All':
     filtered_df = filtered_df[filtered_df['Flop_type'] == flop_type]
 
-# タイトル
-st.title("root-check ノードの分析画面")
+#メインコンテンツ
+with st.container():
+    st.header("Bet検討用の情報")
+    col1, col2 = st.columns(2)
+    with col1:
+        bet_df = filtered_df[filtered_df['Flop action 2'] == "bet"]
+        fig1 = plot_elasticity(bet_df, "Flop size 2", "Flop action 3","Flop betに対する弾性")
+        st.plotly_chart(fig1, use_container_width=True)
+    with col2:
+        bet_df_turn = bet_df[(bet_df["Flop size 2"] >= flop_bet_size[0]) & 
+                            (bet_df["Flop size 2"] <= flop_bet_size[1]) & 
+                            (bet_df["Turn action 1"] == "check") &
+                            (bet_df["Turn action 2"] == "bet")]
+        fig2 = plot_elasticity(bet_df_turn, "Turn size 2", "Turn action 3","Turn CBに対する弾性")
+        st.plotly_chart(fig2, use_container_width=True)
 
-# 2カラムレイアウトの作成
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Bet検討用の情報")
-    
-    bet_df = filtered_df[filtered_df['Flop action 2'] == "bet"]
-    fig1 = plot_elasticity(bet_df, "Flop size 2", "Flop action 3")
-    st.plotly_chart(fig1, use_container_width=True)
-
-    flop_bet_size = st.slider("Flopのbet size", 10, 200,(30, 100))
-    bet_df_turn = bet_df[(bet_df["Flop size 2"] >= flop_bet_size[0]) & 
-                     (bet_df["Flop size 2"] <= flop_bet_size[1]) & 
-                     (bet_df["Turn action 1"] == "check") &
-                     (bet_df["Turn action 2"] == "bet")]
-    fig2 = plot_elasticity(bet_df_turn, "Turn size 2", "Turn action 3")
-    st.plotly_chart(fig2, use_container_width=True)
-    
-
-
-with col2:
-    st.subheader("Check検討用の情報")
-
-    check_df = filtered_df[filtered_df['Flop action 2'] == "check"]
-    fig1 = plot_action_distribution(df,"Turn size 1","Turn OOPbet freq")
-    st.plotly_chart(fig1, use_container_width=True)
-
-    bmcb_size = st.slider("Flopのbet size", 10, 200,(40, 60))
-    check_df_turn = check_df[(check_df["Turn action 1"] == "bet") &
-                             (check_df["Turn size 1"] >= bmcb_size[0]) &
-                             (check_df["Turn size 1"] <= bmcb_size[1])]
-    fig2 = plot_hand_distribution(check_df_turn,"OOP_Turn_hand_rank","hand rank")
-    st.plotly_chart(fig2, use_container_width=True)
+with st.container():
+    st.header("Check検討用の情報")
+    col3, col4 = st.columns(2)
+    with col3:
+        check_df = filtered_df[filtered_df['Flop action 2'] == "check"]
+        fig1 = plot_action_distribution(check_df,"Turn size 1","Turn BMCB頻度")
+        st.plotly_chart(fig1, use_container_width=True)
+    with col4:
+        check_df_turn = check_df[(check_df["Turn action 1"] == "bet") &
+                                (check_df["Turn size 1"] >= bmcb_size[0]) &
+                                (check_df["Turn size 1"] <= bmcb_size[1])]
+        fig2 = plot_hand_distribution(check_df_turn,"OOP_Turn_hand_rank","BMCBの推定レンジ")
+        st.plotly_chart(fig2, use_container_width=True)
