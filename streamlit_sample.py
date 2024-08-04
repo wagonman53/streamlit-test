@@ -161,7 +161,7 @@ def plot_hand_distribution(df, category_column, title="Category Proportions"):
 # CSVファイルの読み込み関数
 @st.cache_data
 def load_data(file_path):
-    df = pd.read_csv(file_path)  # CSVファイルのパスを指定してください
+    df = pd.read_csv(file_path)
     df = df[df['Flop action 1'] == 'check']
     return df
 
@@ -169,8 +169,9 @@ def load_data(file_path):
 # ここからページ作成
 st.set_page_config(layout="wide")
 st.title("root-checkノードの分析画面")
-selected_file = st.sidebar.selectbox("プールデータの選択", ["50-100 1M mda.csv"])
-df = load_data(selected_file)
+file_name = {"Stars 200nl":"Stars 200nl mda.csv", "Stars 100nl":"Stars 100nl mda.csv", "Stars 50nl":"Stars 50nl mda.csv"}
+selected_file = st.sidebar.selectbox("プールデータの選択", ["Stars 200nl", "Stars 100nl", "Stars 50nl"])
+df = load_data(file_name[selected_file])
 oop_rank = st.sidebar.selectbox("OOP Player Rank", ['All'] + list(df['OOP_player_rank'].unique()))
 ip_rank = st.sidebar.selectbox("IP Player Rank", ['All'] + list(df['IP_player_rank'].unique()))
 
@@ -178,6 +179,7 @@ ip_rank = st.sidebar.selectbox("IP Player Rank", ['All'] + list(df['IP_player_ra
 with st.sidebar:
     with st.expander("Preflop設定"):
         pot_range = st.slider("Preflop終了時のpotsize($)", 2, 50,(4, 9))
+        es_range = st.slider("Preflop終了時のES(BB)", 10, 500,(50, 150))
         aggressor = st.selectbox("Preflop Aggressor", ["All", "OOP", "IP"], index=2)
         oop_positions = st.multiselect("OOP Position", ['All'] + list(df['OOP_position'].unique()),default=['BB'])
         ip_positions = st.multiselect("IP Position", ['All'] + list(df['IP_position'].unique()),default=['All'])
@@ -192,7 +194,8 @@ with st.sidebar:
 
 # フィルタリングを適用
 filtered_df = df[
-    (df['Pot'] >= pot_range[0]) & (df['Pot'] <= pot_range[1]) &
+    (df['Pot(BB)'] >= pot_range[0]) & (df['Pot(BB)'] <= pot_range[1]) &
+    (df['ES(BB)'] >= es_range[0]) & (df['ES(BB)'] <= es_range[1]) &
     (df['Flop_high'] >= high_card[0]) & (df['Flop_high'] <= high_card[1])
 ]
 
@@ -213,6 +216,10 @@ if ip_rank != 'All':
 
 if flop_type != 'All':
     filtered_df = filtered_df[filtered_df['Flop_type'] == flop_type]
+
+#サンプルデータ数の表示
+st.sidebar.write(f"このノードに到達したデータの数: {len(df)}")
+st.sidebar.write(f"フィルタ後のデータ数: {len(filtered_df)}") 
 
 #メインコンテンツ
 with st.container():
@@ -235,11 +242,11 @@ with st.container():
     col3, col4 = st.columns(2)
     with col3:
         check_df = filtered_df[filtered_df['Flop action 2'] == "check"]
-        fig1 = plot_action_distribution(check_df,"Turn size 1","Turn BMCB頻度")
-        st.plotly_chart(fig1, use_container_width=True)
+        fig3 = plot_action_distribution(check_df,"Turn size 1","Turn BMCB頻度")
+        st.plotly_chart(fig3, use_container_width=True)
     with col4:
         check_df_turn = check_df[(check_df["Turn action 1"] == "bet") &
                                 (check_df["Turn size 1"] >= bmcb_size[0]) &
                                 (check_df["Turn size 1"] <= bmcb_size[1])]
-        fig2 = plot_hand_distribution(check_df_turn,"OOP_Turn_hand_rank","BMCBの推定レンジ")
-        st.plotly_chart(fig2, use_container_width=True)
+        fig4 = plot_hand_distribution(check_df_turn,"OOP_Turn_hand_rank","BMCBの推定レンジ")
+        st.plotly_chart(fig4, use_container_width=True)
